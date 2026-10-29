@@ -7,13 +7,13 @@ Aplicação de terminal em C integrada ao MySQL para administrar clientes, propr
 
 ## Funcionalidades
 
-- cadastros e manutenção das entidades da imobiliária;
-- agendamento de visitas com o corretor responsável pelo imóvel;
-- registro de propostas para imóveis disponíveis;
-- criação transacional de contratos a partir de propostas válidas;
-- atualização automática da disponibilidade do imóvel por gatilhos;
-- oito relatórios gerenciais, incluindo contratos de 2022 e rendimento anual de corretores;
-- dados de demonstração prontos para uso.
+- Cadastros e manutenção das entidades da imobiliária;
+- Agendamento de visitas com o corretor responsável pelo imóvel;
+- Registro de propostas para imóveis disponíveis;
+- Criação transacional de contratos a partir de propostas válidas;
+- Atualização automática da disponibilidade do imóvel por gatilhos;
+- Oito relatórios gerenciais, incluindo contratos de 2022 e rendimento anual de corretores;
+- Dados de demonstração prontos para uso.
 
 ## Tecnologias
 
