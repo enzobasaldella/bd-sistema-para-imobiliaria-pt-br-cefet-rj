@@ -1,42 +1,27 @@
-# Compilador a ser utilizado
-CC = gcc
+CC ?= gcc
+CFLAGS := -std=c11 -Wall -Wextra -Wpedantic -Werror
+MYSQL_CFLAGS := $(shell mysql_config --cflags 2>/dev/null || pkg-config --cflags mysqlclient 2>/dev/null)
+MYSQL_LIBS := $(shell mysql_config --libs 2>/dev/null || pkg-config --libs mysqlclient 2>/dev/null)
+FONTES := main.c menu.c entrada.c conexao.c cliente.c imovel.c corretor.c fiador.c negociacao.c consulta.c
+OBJETOS := $(FONTES:.c=.o)
+EXECUTAVEL := imobiliaria
 
-# Flags de Compilação (CFLAGS)
-# -Wall -Wextra: Ativa avisos para ajudar a identificar erros.
-# -g: Adiciona informações de debug.
-# -I: Indica onde estão os arquivos de cabeçalho (.h) do MySQL.
-# (Nota: Em Linux é padrão /usr/include/mysql. Em Windows/Mac pode variar).
-CFLAGS = -Wall -Wextra -g -I/usr/include/mysql
+.PHONY: all clean run static-check
 
-# Flags de Linkagem (LDFLAGS)
-# -L: Indica onde está a biblioteca binária do MySQL.
-# -lmysqlclient: O nome da biblioteca que o compilador deve buscar.
-LDFLAGS = -L/usr/lib/mysql -lmysqlclient
+all: $(EXECUTAVEL)
 
-# Nome do executável final que será gerado
-TARGET = sistema_imobiliaria
+$(EXECUTAVEL): $(OBJETOS)
+	$(CC) $(OBJETOS) $(MYSQL_LIBS) -o $@
 
-# Lista de todos os arquivos fonte do projeto
-SRCS = main.c menu.c conexao.c cliente.c imovel.c corretor.c fiador.c negociacao.c consulta.c
-
-# Transforma a lista de .c em .o (Objetos compilados) automaticamente
-OBJS = $(SRCS:.c=.o)
-
-# Regra padrão (o que acontece quando você digita apenas 'make')
-all: $(TARGET)
-
-# Regra de Linkagem: Junta todos os objetos (.o) para criar o executável final
-$(TARGET): $(OBJS)
-	$(CC) $(OBJS) -o $(TARGET) $(LDFLAGS)
-
-# Regra de Compilação: Transforma cada .c em um .o individualmente
 %.o: %.c
-	$(CC) $(CFLAGS) -c $< -o $@
+	$(CC) $(CFLAGS) $(MYSQL_CFLAGS) -c $< -o $@
 
-# Regra de Limpeza: Apaga o executável e os arquivos .o (digite 'make clean')
+run: $(EXECUTAVEL)
+	./$(EXECUTAVEL)
+
+static-check:
+	$(CC) $(CFLAGS) -Itests/stubs -fsyntax-only $(FONTES)
+	python3 tests/validar_repositorio.py
+
 clean:
-	rm -f $(OBJS) $(TARGET)
-
-# Regra de Execução: Compila (se necessário) e roda o programa (digite 'make run')
-run: $(TARGET)
-	./$(TARGET)
+	$(RM) $(OBJETOS) $(EXECUTAVEL)

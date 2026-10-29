@@ -1,0 +1,31 @@
+name: Validacao
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  compilar-e-validar:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: root
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -proot"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Instalar dependencias
+        run: sudo apt-get update && sudo apt-get install -y default-libmysqlclient-dev default-mysql-client
+      - name: Compilar com verificacoes estritas
+        run: make
+      - name: Executar verificacoes estaticas
+        run: make static-check
+      - name: Criar e validar o banco
+        run: |
+          mysql -h 127.0.0.1 -uroot -proot < banco-de-dados-imobiliaria.sql
+          test "$(mysql -N -s -h 127.0.0.1 -uroot -proot < tests/verificar_banco.sql)" = "OK"

@@ -1,155 +1,101 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 #include "corretor.h"
 #include "conexao.h"
-// Semelhante as outras funções de cadastro, modificação e registro!
-void cadastrarCorretor() {
-    MYSQL *conn = conectar();
-    char nome[200], creci[50], telefone[20];
-    char data_prestacao[11];
-    float comissao;
+#include "entrada.h"
+#include <limits.h>
+#include <stdio.h>
 
-    printf("\nCadastro de Corretor\n");
-
-    printf("Nome: ");
-    fgets(nome, sizeof(nome), stdin);
-    nome[strcspn(nome, "\n")] = 0;
-
-    printf("CRECI (Formato: CRECI-RJ 1234 F): ");
-    fgets(creci, sizeof(creci), stdin);
-    creci[strcspn(creci, "\n")] = 0;
-
-    printf("Telefone: ");
-    fgets(telefone, sizeof(telefone), stdin);
-    telefone[strcspn(telefone, "\n")] = 0;
-
-    printf("Data de inicio da prestacao (YYYY-MM-DD): ");
-    scanf("%10s", data_prestacao);
-    getchar();
-    // DECIMAL (5,2)
-    printf("Comissao (Percentual): ");
-    scanf("%f", &comissao);
-    getchar();
-
-    char query[500];
-    snprintf(query, sizeof(query),
-        "INSERT INTO Corretor (nome, creci, telefone, data_prestacao, comissao) "
-        "VALUES ('%s', '%s', '%s', '%s', %.2f)",
-        nome, creci, telefone, data_prestacao, comissao);
-
-    if (mysql_query(conn, query)) {
-        fprintf(stderr, "Erro ao cadastrar corretor: %s\n", mysql_error(conn));
-    } else {
-        printf("Corretor cadastrado com sucesso!\n");
-    }
-
-    mysql_close(conn);
+void cadastrar_corretor(void) {
+  char nome[201], creci[51], tel[21], data[11];
+  double comissao;
+  if (!ler_texto("Nome: ", nome, sizeof(nome), false) ||
+      !ler_texto("CRECI: ", creci, sizeof(creci), false) ||
+      !ler_texto("Telefone: ", tel, sizeof(tel), false) ||
+      !ler_texto("Inicio da prestacao (AAAA-MM-DD): ", data, sizeof(data),
+                 false) ||
+      !ler_decimal("Comissao (%): ", 0, 100, &comissao))
+    return;
+  MYSQL *c = conectar();
+  if (!c)
+    return;
+  char en[401], ec[101], et[41], ed[21], q[900];
+  escapar_texto(c, nome, en, sizeof(en));
+  escapar_texto(c, creci, ec, sizeof(ec));
+  escapar_texto(c, tel, et, sizeof(et));
+  escapar_texto(c, data, ed, sizeof(ed));
+  snprintf(q, sizeof(q),
+           "INSERT INTO corretor(nome,creci,telefone,data_prestacao,comissao) "
+           "VALUES('%s','%s','%s','%s',%.2f)",
+           en, ec, et, ed, comissao);
+  if (executar_comando(c, q, "cadastrar o corretor"))
+    puts("Corretor cadastrado.");
+  mysql_close(c);
 }
 
-void listarCorretores() {
-    MYSQL *conn = conectar();
-    MYSQL_RES *res; // Armazenar o resultado.
-    MYSQL_ROW row;  // Percorrer o resultado.
-
-    char query[] = "SELECT id_corretor, nome, creci, telefone, data_prestacao, comissao FROM Corretor ORDER BY id_corretor ASC";
-
-    if (mysql_query(conn, query)) {
-        fprintf(stderr, "Erro ao listar corretores: %s\n", mysql_error(conn));
-        return;
-    }
-
-    res = mysql_store_result(conn);
-    if (res == NULL) {
-        fprintf(stderr, "Erro ao armazenar resultado: %s\n", mysql_error(conn));
-        return;
-    }
-
-    printf("\nLista de Corretores:\n");
-    printf("------------------------------------------------------------------------------------------------\n");
-    printf("ID | Nome                 | CRECI           | Telefone      | Inicio Servico | Comissao\n");
-    printf("------------------------------------------------------------------------------------------------\n");
-
-    while ((row = mysql_fetch_row(res))) {
-        printf("%-2s | %-20s | %-15s | %-13s | %-14s | %.2f%%\n",
-               row[0], row[1], row[2], row[3], row[4], atof(row[5]));
-    }
-
-    printf("------------------------------------------------------------------------------------------------\n");
-
-    mysql_free_result(res);
-    mysql_close(conn);
+void listar_corretores(void) {
+  MYSQL *c = conectar();
+  if (!c)
+    return;
+  MYSQL_RES *r = executar_consulta(
+      c,
+      "SELECT id_corretor,nome,creci,telefone,data_prestacao,comissao FROM "
+      "corretor ORDER BY id_corretor",
+      "listar os corretores");
+  if (r) {
+    MYSQL_ROW x;
+    puts("\nID | Nome | CRECI | Telefone | Inicio | Comissao");
+    while ((x = mysql_fetch_row(r)))
+      printf("%s | %s | %s | %s | %s | %s%%\n", x[0], x[1], x[2], x[3], x[4],
+             x[5]);
+    mysql_free_result(r);
+  }
+  mysql_close(c);
 }
 
-void modificarCorretor() {
-    MYSQL *conn = conectar();
-    int id, opcao;
-    char novo_telefone[20];
-    float nova_comissao;
-    char query[200];
-
-    printf("\nModificar Corretor\n");
-    printf("Digite o ID do corretor: ");
-    scanf("%d", &id);
-    getchar();
-
-    printf("\nEscolha o que deseja modificar:\n");
-    printf("1 - Alterar telefone\n");
-    printf("2 - Alterar comissao\n");
-    printf("Opcao: ");
-    scanf("%d", &opcao);
-    getchar();
-
-    switch (opcao) {
-        case 1:
-            printf("Novo telefone: ");
-            fgets(novo_telefone, sizeof(novo_telefone), stdin);
-            novo_telefone[strcspn(novo_telefone, "\n")] = 0;
-
-            snprintf(query, sizeof(query), "UPDATE Corretor SET telefone = '%s' WHERE id_corretor = %d", novo_telefone, id);
-            break;
-
-        case 2:
-            printf("Nova comissao (exemplo: 5.50 para 5,5%%): ");
-            scanf("%f", &nova_comissao);
-            getchar();
-
-            snprintf(query, sizeof(query), "UPDATE Corretor SET comissao = %.2f WHERE id_corretor = %d", nova_comissao, id);
-            break;
-
-        default:
-            printf("Opcao invalida.\n");
-            mysql_close(conn);
-            return;
+void modificar_corretor(void) {
+  int id, op;
+  double comissao;
+  char tel[21], et[41], q[300];
+  if (!ler_inteiro("ID do corretor: ", 1, INT_MAX, &id) ||
+      !ler_inteiro("Campo (1-Telefone, 2-Comissao): ", 1, 2, &op))
+    return;
+  MYSQL *c = conectar();
+  if (!c)
+    return;
+  if (op == 1) {
+    if (!ler_texto("Novo telefone: ", tel, sizeof(tel), false)) {
+      mysql_close(c);
+      return;
     }
-
-    if (mysql_query(conn, query)) {
-        fprintf(stderr, "Erro ao modificar corretor: %s\n", mysql_error(conn));
-    } else {
-        printf("Corretor atualizado com sucesso!\n");
+    escapar_texto(c, tel, et, sizeof(et));
+    snprintf(q, sizeof(q),
+             "UPDATE corretor SET telefone='%s' WHERE id_corretor=%d", et, id);
+  } else {
+    if (!ler_decimal("Nova comissao (%): ", 0, 100, &comissao)) {
+      mysql_close(c);
+      return;
     }
-
-    mysql_close(conn);
+    snprintf(q, sizeof(q),
+             "UPDATE corretor SET comissao=%.2f WHERE id_corretor=%d", comissao,
+             id);
+  }
+  if (executar_comando(c, q, "atualizar o corretor"))
+    puts(mysql_affected_rows(c) ? "Corretor atualizado."
+                                : "Corretor nao encontrado ou sem alteracoes.");
+  mysql_close(c);
 }
 
-void deletarCorretor() {
-    MYSQL *conn = conectar();
-    int id;
-
-    printf("\nExcluir Corretor\n");
-    printf("Digite o ID do corretor: ");
-    scanf("%d", &id);
-    getchar();
-
-    char query[200];
-    snprintf(query, sizeof(query), "DELETE FROM Corretor WHERE id_corretor = %d", id);
-
-    if (mysql_query(conn, query)) {
-        fprintf(stderr, "Erro ao excluir corretor: %s\n", mysql_error(conn));
-    } else {
-        printf("Corretor excluido com sucesso!\n");
-        // ON DELETE SET NULL, sem exclusão em tabelas relacionadas (ex: Ímoveis).
-    }
-
-    mysql_close(conn);
+void excluir_corretor(void) {
+  int id;
+  if (!ler_inteiro("ID do corretor: ", 1, INT_MAX, &id) ||
+      !confirmar("Confirmar exclusao? (s/N): "))
+    return;
+  char q[128];
+  snprintf(q, sizeof(q), "DELETE FROM corretor WHERE id_corretor=%d", id);
+  MYSQL *c = conectar();
+  if (!c)
+    return;
+  if (executar_comando(c, q, "excluir o corretor"))
+    puts(mysql_affected_rows(c) ? "Corretor excluido."
+                                : "Corretor nao encontrado.");
+  mysql_close(c);
 }

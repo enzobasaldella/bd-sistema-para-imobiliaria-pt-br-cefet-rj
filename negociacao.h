@@ -1,11 +1,9 @@
 #ifndef NEGOCIACAO_H
 #define NEGOCIACAO_H
-
-void marcarVisita();
-void registrarProposta();
-void firmarContrato();
-void listarVisitas();
-void listarProposta();
-void cancelarVisita();
-
+void marcar_visita(void);
+void registrar_proposta(void);
+void firmar_contrato(void);
+void listar_visitas(void);
+void cancelar_visita(void);
+void listar_propostas(void);
 #endif

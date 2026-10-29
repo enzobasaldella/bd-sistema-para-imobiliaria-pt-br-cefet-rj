@@ -1,294 +1,166 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include "conexao.h"
 #include "negociacao.h"
-// Aqui existem as tabelas que representam todas as negociações oferecidas pela imobiliária.
-// Função para marcar Visita (Pelo Inquilino).
-void marcarVisita() {
-    MYSQL *conn = conectar();
-    int id_inquilino, id_imovel, id_corretor;
-    char data_visita[20];
+#include "conexao.h"
+#include "entrada.h"
+#include <limits.h>
+#include <stdio.h>
 
-    printf("\nMarcar Visita\n");
-    // Coleta de dados (FK da tabela).
-    printf("ID do Inquilino: ");
-    scanf("%d", &id_inquilino);
-    getchar();
-
-    printf("ID do Imovel: ");
-    scanf("%d", &id_imovel);
-    getchar();
-
-    printf("ID do Corretor: ");
-    scanf("%d", &id_corretor);
-    getchar();
-
-    printf("Data da Visita (YYYY-MM-DD HH:MM:SS): ");
-    scanf("%19s", data_visita);
-    getchar();
-
-    char query[300]; // Querry para conferir a situação do imóvel (disponível ou não).
-    snprintf(query, sizeof(query),
-             "SELECT situacao FROM Imovel WHERE id_imovel = %d AND situacao = 'Disponivel'", id_imovel);
-    
-    if (mysql_query(conn, query)) {
-        fprintf(stderr, "Erro ao verificar disponibilidade: %s\n", mysql_error(conn));
-        mysql_close(conn);
-        return;
-    }
-
-    MYSQL_RES *res = mysql_store_result(conn);
-    if (res == NULL || mysql_num_rows(res) == 0) {
-        printf("O imovel nao esta disponivel para visita.\n");
-        mysql_free_result(res);
-        mysql_close(conn);
-        return;
-    }
-    mysql_free_result(res);
-
-    snprintf(query, sizeof(query),
-             "INSERT INTO Visita (id_inquilino, id_imovel, id_corretor, data_visita) "
-             "VALUES (%d, %d, %d, '%s')", id_inquilino, id_imovel, id_corretor, data_visita);
-
-    if (mysql_query(conn, query)) {
-        fprintf(stderr, "Erro ao marcar visita: %s\n", mysql_error(conn));
-    } else {
-        printf("Visita marcada com sucesso!\n");
-    }
-
-    mysql_close(conn);
+void marcar_visita(void) {
+  int imovel, inquilino;
+  char data_hora[20], e_data[39], q[700];
+  if (!ler_inteiro("ID do imovel: ", 1, INT_MAX, &imovel) ||
+      !ler_inteiro("ID do inquilino: ", 1, INT_MAX, &inquilino) ||
+      !ler_texto("Data e hora (AAAA-MM-DD HH:MM:SS): ", data_hora,
+                 sizeof(data_hora), false))
+    return;
+  MYSQL *c = conectar();
+  if (!c)
+    return;
+  escapar_texto(c, data_hora, e_data, sizeof(e_data));
+  /* O corretor vem do imovel para impedir visitas associadas a outro
+   * responsavel. */
+  snprintf(q, sizeof(q),
+           "INSERT INTO visita(id_inquilino,id_imovel,id_corretor,data_visita) "
+           "SELECT %d,i.id_imovel,i.id_corretor,'%s' FROM imovel i WHERE "
+           "i.id_imovel=%d AND i.id_corretor IS NOT NULL AND "
+           "i.situacao='Disponivel'",
+           inquilino, e_data, imovel);
+  if (executar_comando(c, q, "marcar a visita"))
+    puts(mysql_affected_rows(c)
+             ? "Visita marcada."
+             : "Imovel indisponivel, inexistente ou sem corretor.");
+  mysql_close(c);
 }
 
-void registrarProposta() {
-    MYSQL *conn = conectar();
-    int id_inquilino, id_imovel;
-    float valor_proposta;
-    char data_proposta[11], validade[11];
-
-    printf("\nRegistrar Proposta\n");
-
-    printf("ID do Inquilino: ");
-    scanf("%d", &id_inquilino);
-    getchar();
-
-    printf("ID do Imovel: ");
-    scanf("%d", &id_imovel);
-    getchar();
-
-    printf("Valor da Proposta: ");
-    scanf("%f", &valor_proposta);
-    getchar();
-
-    printf("Data da Proposta (YYYY-MM-DD): ");
-    scanf("%10s", data_proposta);
-    getchar();
-
-    printf("Data de Validade (YYYY-MM-DD): ");
-    scanf("%10s", validade);
-    getchar();
-
-    char query[300];
-    snprintf(query, sizeof(query),
-             "SELECT situacao FROM Imovel WHERE id_imovel = %d AND situacao = 'Disponivel'", id_imovel);
-
-    if (mysql_query(conn, query)) {
-        fprintf(stderr, "Erro ao verificar disponibilidade: %s\n", mysql_error(conn));
-        mysql_close(conn);
-        return;
-    }
-
-    MYSQL_RES *res = mysql_store_result(conn);
-    if (res == NULL || mysql_num_rows(res) == 0) {
-        printf("Erro: O imovel nao esta disponivel para propostas.\n");
-        mysql_free_result(res);
-        mysql_close(conn);
-        return;
-    }
-    mysql_free_result(res);
-
-    snprintf(query, sizeof(query),
-             "INSERT INTO Proposta (id_inquilino, id_imovel, valor_proposta, data_proposta, validade) "
-             "VALUES (%d, %d, %.2f, '%s', '%s')", id_inquilino, id_imovel, valor_proposta, data_proposta, validade);
-
-    if (mysql_query(conn, query)) {
-        fprintf(stderr, "Erro ao registrar proposta: %s\n", mysql_error(conn));
-    } else {
-        printf("Proposta registrada com sucesso!\n");
-    }
-
-    mysql_close(conn);
+void registrar_proposta(void) {
+  int inquilino, imovel;
+  double valor;
+  char data[11], validade[11], e_data[21], e_validade[21], q[700];
+  if (!ler_inteiro("ID do inquilino: ", 1, INT_MAX, &inquilino) ||
+      !ler_inteiro("ID do imovel: ", 1, INT_MAX, &imovel) ||
+      !ler_decimal("Valor proposto: ", 0.01, 9999999999.99, &valor) ||
+      !ler_texto("Data da proposta (AAAA-MM-DD): ", data, sizeof(data),
+                 false) ||
+      !ler_texto("Validade (AAAA-MM-DD): ", validade, sizeof(validade), false))
+    return;
+  MYSQL *c = conectar();
+  if (!c)
+    return;
+  escapar_texto(c, data, e_data, sizeof(e_data));
+  escapar_texto(c, validade, e_validade, sizeof(e_validade));
+  snprintf(q, sizeof(q),
+           "INSERT INTO "
+           "proposta(id_inquilino,id_imovel,valor_proposta,data_proposta,"
+           "validade) SELECT %d,i.id_imovel,%.2f,'%s','%s' FROM imovel i WHERE "
+           "i.id_imovel=%d AND i.situacao='Disponivel'",
+           inquilino, valor, e_data, e_validade, imovel);
+  if (executar_comando(c, q, "registrar a proposta"))
+    puts(mysql_affected_rows(c) ? "Proposta registrada."
+                                : "Imovel inexistente ou indisponivel.");
+  mysql_close(c);
 }
 
-void firmarContrato() {
-    MYSQL *conn = conectar();
-    int id_proposta, id_inquilino;
-
-    printf("\nFirmar Contrato\n");
-
-    printf("ID da Proposta: ");
-    scanf("%d", &id_proposta);
-    getchar();
-
-    char query[300];
-    snprintf(query, sizeof(query),
-             "SELECT id_inquilino FROM Proposta WHERE id_proposta = %d AND validade >= CURDATE()", id_proposta);
-
-    if (mysql_query(conn, query)) {
-        fprintf(stderr, "Erro ao verificar validade da proposta: %s\n", mysql_error(conn));
-        mysql_close(conn);
-        return;
-    }
-
-    MYSQL_RES *res = mysql_store_result(conn);
-    if (res == NULL || mysql_num_rows(res) == 0) {
-        printf("Erro: A proposta nao e valida ou ja expirou.\n");
-        mysql_free_result(res);
-        mysql_close(conn);
-        return;
-    }
-
-    MYSQL_ROW row = mysql_fetch_row(res);
-    id_inquilino = atoi(row[0]); 
-    mysql_free_result(res);
-
-    snprintf(query, sizeof(query),
-             "SELECT COUNT(*) FROM Fiador WHERE id_inquilino = %d", id_inquilino);
-
-    if (mysql_query(conn, query)) {
-        fprintf(stderr, "Erro ao verificar fiadores: %s\n", mysql_error(conn));
-        mysql_close(conn);
-        return;
-    }
-
-    res = mysql_store_result(conn);
-    row = mysql_fetch_row(res);
-    int total_fiadores = atoi(row[0]);
-    mysql_free_result(res);
-
-    if (total_fiadores < 2) {
-        printf("Erro: O inquilino nao possui pelo menos dois fiadores.\n");
-        mysql_close(conn);
-        return;
-    }
-
-    snprintf(query, sizeof(query),
-             "INSERT INTO Contrato (id_proposta, duracao, valor_inicial) "
-             "VALUES (%d, (SELECT duracao FROM Proposta WHERE id_proposta = %d), "
-             "(SELECT valor_proposta FROM Proposta WHERE id_proposta = %d))",
-             id_proposta, id_proposta, id_proposta);
-
-    if (mysql_query(conn, query)) {
-        fprintf(stderr, "Erro ao firmar contrato: %s\n", mysql_error(conn));
-    } else {
-        printf("Contrato firmado com sucesso!\n");
-    }
-
-    mysql_close(conn);
+void firmar_contrato(void) {
+  int proposta, duracao;
+  char q[1000];
+  if (!ler_inteiro("ID da proposta: ", 1, INT_MAX, &proposta) ||
+      !ler_inteiro("Duracao do contrato (meses): ", 1, 600, &duracao))
+    return;
+  MYSQL *c = conectar();
+  if (!c)
+    return;
+  if (!executar_comando(c, "START TRANSACTION", "iniciar a transacao"))
+    goto fim;
+  /* O SELECT ... FOR UPDATE evita dois contratos simultaneos para o mesmo
+   * imovel. */
+  snprintf(q, sizeof(q),
+           "SELECT p.id_proposta FROM proposta p JOIN imovel i ON "
+           "i.id_imovel=p.id_imovel WHERE p.id_proposta=%d AND "
+           "p.validade>=CURRENT_DATE AND i.situacao='Disponivel' AND (SELECT "
+           "COUNT(*) FROM fiador f WHERE f.id_inquilino=p.id_inquilino)>=2 FOR "
+           "UPDATE",
+           proposta);
+  MYSQL_RES *r = executar_consulta(c, q, "validar a proposta");
+  if (!r)
+    goto rollback;
+  bool proposta_valida = mysql_fetch_row(r) != NULL;
+  mysql_free_result(r);
+  if (!proposta_valida) {
+    puts("A proposta nao esta valida, o imovel nao esta disponivel ou faltam "
+         "fiadores.");
+    goto rollback;
+  }
+  snprintf(
+      q, sizeof(q),
+      "INSERT INTO contrato(id_proposta,duracao,valor_inicial,data_contrato) "
+      "SELECT id_proposta,%d,valor_proposta,CURRENT_DATE FROM proposta WHERE "
+      "id_proposta=%d",
+      duracao, proposta);
+  if (!executar_comando(c, q, "firmar o contrato"))
+    goto rollback;
+  if (executar_comando(c, "COMMIT", "confirmar a transacao"))
+    puts("Contrato firmado.");
+  goto fim;
+rollback:
+  executar_comando(c, "ROLLBACK", "desfazer a transacao");
+fim:
+  mysql_close(c);
 }
 
-void listarVisitas() {
-    MYSQL *conn = conectar();
-    MYSQL_RES *res;
-    MYSQL_ROW row;
-
-    char query[] =
-        "SELECT id_visita, id_inquilino, id_imovel, id_corretor, data_visita "
-        "FROM Visita ORDER BY data_visita ASC";
-
-    if (mysql_query(conn, query)) {
-        fprintf(stderr, "Erro ao listar visitas: %s\n", mysql_error(conn));
-        return;
-    }
-
-    res = mysql_store_result(conn);
-    if (res == NULL) {
-        fprintf(stderr, "Erro ao armazenar resultado: %s\n", mysql_error(conn));
-        return;
-    }
-
-    printf("\nLista de Visitas:\n");
-    printf("-----------------------------------------------------------------------\n");
-    printf(" ID  | Inquilino ID | Imovel ID | Corretor ID | Data\n");
-    printf("----------------------------------------------------------------------\n");
-
-    while ((row = mysql_fetch_row(res))) {
-        printf(" %-3s | %-12s | %-9s | %-11s | %s\n",
-               row[0], row[1], row[2], row[3], row[4]);
-    }
-
-    printf("--------------------------------------------------------------------\n");
-
-    mysql_free_result(res);
-    mysql_close(conn);
+void listar_visitas(void) {
+  MYSQL *c = conectar();
+  if (!c)
+    return;
+  MYSQL_RES *r = executar_consulta(
+      c,
+      "SELECT v.id_visita,ci.nome,v.id_imovel,co.nome,v.data_visita FROM "
+      "visita v JOIN cliente ci ON ci.id_cliente=v.id_inquilino JOIN corretor "
+      "co ON co.id_corretor=v.id_corretor ORDER BY v.data_visita",
+      "listar as visitas");
+  if (r) {
+    MYSQL_ROW x;
+    puts("\nID | Inquilino | Imovel | Corretor | Data e hora");
+    while ((x = mysql_fetch_row(r)))
+      printf("%s | %s | %s | %s | %s\n", x[0], x[1], x[2], x[3], x[4]);
+    mysql_free_result(r);
+  }
+  mysql_close(c);
 }
 
-void cancelarVisita() {
-    MYSQL *conn = conectar();
-    int id_visita;
-    char query[150];
-
-    printf("\nCancelar Visita\n");
-    printf("Digite o ID da visita a ser cancelada: ");
-    scanf("%d", &id_visita);
-    getchar();
-
-    char confirmacao;
-    printf("Tem certeza que deseja cancelar a visita ID %d? (S/N): ", id_visita);
-    scanf("%c", &confirmacao);
-    getchar();
-
-    if (confirmacao != 'S' && confirmacao != 's') {
-        printf("Operacao cancelada.\n");
-        mysql_close(conn);
-        return;
-    }
-
-    snprintf(query, sizeof(query), "DELETE FROM Visita WHERE id_visita = %d", id_visita);
-
-    if (mysql_query(conn, query)) {
-        fprintf(stderr, "Erro ao cancelar visita: %s\n", mysql_error(conn));
-    } else {
-        printf("Visita cancelada com sucesso!\n");
-    }
-
-    mysql_close(conn);
+void cancelar_visita(void) {
+  int id;
+  if (!ler_inteiro("ID da visita: ", 1, INT_MAX, &id) ||
+      !confirmar("Confirmar cancelamento? (s/N): "))
+    return;
+  char q[128];
+  snprintf(q, sizeof(q), "DELETE FROM visita WHERE id_visita=%d", id);
+  MYSQL *c = conectar();
+  if (!c)
+    return;
+  if (executar_comando(c, q, "cancelar a visita"))
+    puts(mysql_affected_rows(c) ? "Visita cancelada."
+                                : "Visita nao encontrada.");
+  mysql_close(c);
 }
 
-void listarProposta() {
-    MYSQL *conn = conectar();
-    MYSQL_RES *res;
-    MYSQL_ROW row;
-
-    // Querry para buscar todas as propostas ordenadas por data
-    char query[] =
-        "SELECT id_proposta, id_inquilino, id_imovel, valor_proposta, data_proposta, validade "
-        "FROM Proposta ORDER BY data_proposta ASC";
-
-    if (mysql_query(conn, query)) {
-        fprintf(stderr, "Erro ao listar propostas: %s\n", mysql_error(conn));
-        return;
-    }
-
-    res = mysql_store_result(conn);
-    if (res == NULL) {
-        fprintf(stderr, "Erro ao armazenar resultado: %s\n", mysql_error(conn));
-        return;
-    }
-
-    printf("\nLista de Propostas:\n");
-    printf("---------------------------------------------------------------------------------\n");
-    printf(" ID  | Inquilino ID | Imovel ID | Valor Proposta | Data Proposta  | Validade \n");
-    printf("---------------------------------------------------------------------------------\n");
-
-    while ((row = mysql_fetch_row(res))) {
-        printf(" %-3s | %-12s | %-9s | R$ %-12s | %-13s | %-10s\n",
-               row[0], row[1], row[2], row[3], row[4], row[5]);
-    }
-
-    printf("---------------------------------------------------------------------------------\n");
-
-    // Libera memória e fecha conexão
-    mysql_free_result(res);
-    mysql_close(conn);
+void listar_propostas(void) {
+  MYSQL *c = conectar();
+  if (!c)
+    return;
+  MYSQL_RES *r = executar_consulta(
+      c,
+      "SELECT "
+      "p.id_proposta,c.nome,p.id_imovel,p.valor_proposta,p.data_proposta,p."
+      "validade,IF(co.id_contrato IS NULL,'Pendente','Contratada') FROM "
+      "proposta p JOIN cliente c ON c.id_cliente=p.id_inquilino LEFT JOIN "
+      "contrato co ON co.id_proposta=p.id_proposta ORDER BY p.id_proposta",
+      "listar as propostas");
+  if (r) {
+    MYSQL_ROW x;
+    puts("\nID | Inquilino | Imovel | Valor | Data | Validade | Estado");
+    while ((x = mysql_fetch_row(r)))
+      printf("%s | %s | %s | R$ %s | %s | %s | %s\n", x[0], x[1], x[2], x[3],
+             x[4], x[5], x[6]);
+    mysql_free_result(r);
+  }
+  mysql_close(c);
 }

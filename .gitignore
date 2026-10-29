@@ -1,0 +1,5 @@
+*.o
+imobiliaria
+.env
+.idea/
+.vscode/
