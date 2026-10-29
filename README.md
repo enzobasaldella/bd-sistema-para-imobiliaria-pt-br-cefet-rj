@@ -85,7 +85,7 @@ O arquivo `.env` é ignorado pelo Git e não deve ser publicado.
 ├── conexao.c / .h                  # acesso seguro ao MySQL
 ├── entrada.c / .h                  # leitura e validação da entrada
 ├── docs/MODELO_DADOS.md            # diagrama e regras do modelo
-└── tests/                           # verificações estáticas e do banco
+└── tests/                          # verificações estáticas e do banco
 ```
 
 ## Modelo e integridade
