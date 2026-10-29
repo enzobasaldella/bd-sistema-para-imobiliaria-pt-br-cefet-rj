@@ -66,7 +66,7 @@ A conexão é configurada exclusivamente por variáveis de ambiente:
 | `IMOB_DB_HOST` | `127.0.0.1` | Servidor MySQL |
 | `IMOB_DB_PORT` | `3306` | Porta do servidor |
 | `IMOB_DB_USER` | `root` | Usuário do banco |
-| `IMOB_DB_PASSWORD` | vazio | Senha do usuário |
+| `IMOB_DB_PASSWORD` | `null` | Senha do usuário |
 | `IMOB_DB_NAME` | `imobiliaria` | Banco utilizado |
 
 O arquivo `.env` é ignorado pelo Git e não deve ser publicado.
